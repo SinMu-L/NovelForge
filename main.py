@@ -1,4 +1,6 @@
 import os
+import json
+import asyncio
 import sqlite3
 import secrets
 import hashlib
@@ -6,7 +8,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Form, HTTPException
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.templating import Jinja2Templates
 import aiohttp
@@ -166,7 +168,7 @@ def char_count(text: str) -> int:
     return len(text.replace(" ", "").replace("\n", "").replace("\r", "").replace("\t", ""))
 
 
-async def call_llm(text: str, n: int) -> list[str]:
+async def call_llm_stream_one(text: str):
     s = get_settings_dict()
     api_url = s.get("llm_api_url", LLM_API_URL)
     api_key = s.get("llm_api_key", LLM_API_KEY)
@@ -188,8 +190,7 @@ async def call_llm(text: str, n: int) -> list[str]:
         "top_p": 1.0,
         "temperature": 0.4,
         "max_tokens": 2048,
-        "stream": False,
-        "n": n,
+        "stream": True,
     }
 
     async with aiohttp.ClientSession() as session:
@@ -197,11 +198,62 @@ async def call_llm(text: str, n: int) -> list[str]:
             if resp.status != 200:
                 error_body = await resp.text()
                 raise Exception(f"API 错误 ({resp.status}): {error_body[:300]}")
-            data = await resp.json()
-            choices = data.get("choices", [])
-            if not choices:
-                raise Exception("API 返回为空")
-            return [c.get("text", "").strip() for c in choices]
+            buffer = ""
+            async for chunk, _ in resp.content.iter_chunks():
+                if not chunk:
+                    continue
+                buffer += chunk.decode("utf-8", errors="replace")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if line.startswith("data: "):
+                        data_str = line[6:]
+                        if data_str == "[DONE]":
+                            return
+                        data = json.loads(data_str)
+                        choices = data.get("choices", [])
+                        if choices:
+                            text_delta = choices[0].get("text", "")
+                            if text_delta:
+                                yield text_delta
+
+
+async def call_llm_stream_n(text: str, n: int):
+    """Run n concurrent streaming LLM requests, yield (index, kind, value)."""
+    queue = asyncio.Queue()
+    max_output = len(text) * 2
+
+    async def produce(i):
+        try:
+            acc = ""
+            async for token in call_llm_stream_one(text):
+                if len(acc) >= max_output:
+                    break
+                remain = max_output - len(acc)
+                if len(token) > remain:
+                    token = token[:remain]
+                    acc += token
+                    await queue.put((i, "token", token))
+                    break
+                acc += token
+                await queue.put((i, "token", token))
+            truncated = len(acc) >= max_output
+            await queue.put((i, "done", truncated))
+        except Exception as e:
+            await queue.put((i, "error", str(e)))
+
+    tasks = [asyncio.create_task(produce(i)) for i in range(n)]
+
+    try:
+        completed = 0
+        while completed < n:
+            i, kind, value = await queue.get()
+            if kind == "done":
+                completed += 1
+            yield i, kind, value
+    finally:
+        for t in tasks:
+            t.cancel()
 
 
 @app.get("/")
@@ -267,21 +319,28 @@ async def rewrite(request: Request, text: str = Form(...), n: int = Form(SAMPLE_
     if remaining < chars:
         return JSONResponse({"error": f"额度不足。剩余 {remaining} 字，需要 {chars} 字"}, status_code=400)
 
-    try:
-        rewritten = await call_llm(text, min(n, 8))
-    except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=502)
-
     deduct_words(card["id"], chars)
     new_remaining = card["total_words"] - card["used_words"] - chars
     log_rewrite(card["id"], chars)
 
-    return JSONResponse({
-        "original": text,
-        "rewritten": rewritten,
-        "char_count": chars,
-        "remaining": new_remaining,
-    })
+    n = min(n, 8)
+
+    async def event_stream():
+        all_texts = [""] * n
+        try:
+            async for i, kind, value in call_llm_stream_n(text, n):
+                if kind == "token":
+                    all_texts[i] += value
+                    yield f"data: {json.dumps({'index': i, 'token': value})}\n\n"
+                elif kind == "done":
+                    is_truncated = value
+                    yield f"data: {json.dumps({'index': i, 'done': True, 'full_text': all_texts[i], 'truncated': is_truncated, 'remaining': new_remaining})}\n\n"
+                elif kind == "error":
+                    yield f"data: {json.dumps({'index': i, 'done': True, 'full_text': all_texts[i], 'error': value, 'remaining': new_remaining})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/admin", response_class=HTMLResponse)

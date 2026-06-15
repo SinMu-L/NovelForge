@@ -149,6 +149,59 @@
             min-width: 60px;
             text-align: center;
         }
+        .sample-status {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+        .sample-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            height: 28px;
+            padding: 0 6px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid #d4c5a9;
+            background: #f0ebe3;
+            color: #8b7355;
+            transition: all 0.2s;
+        }
+        .sample-badge:hover { background: #e0d5c3; }
+        .sample-badge.streaming {
+            background: #fef9e7;
+            border-color: #8b6914;
+            color: #8b6914;
+            animation: pulse 1s infinite;
+        }
+        .sample-badge.done {
+            background: #dcfce7;
+            border-color: #16a34a;
+            color: #16a34a;
+        }
+        .sample-badge.truncated {
+            background: #fef9e7;
+            border-color: #d97706;
+            color: #92400e;
+        }
+        .sample-badge.garbled {
+            background: #fef2f2;
+            border-color: #dc2626;
+            color: #dc2626;
+        }
+        .sample-badge.active {
+            border-width: 2px;
+            border-color: #8b6914;
+            box-shadow: 0 0 0 2px rgba(139, 105, 20, 0.2);
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
         .diff-content {
             line-height: 2;
             font-size: 15px;
@@ -223,10 +276,11 @@
                     <span class="card-title">AI 处理结果</span>
                     <div class="sample-nav">
                         <button id="prev-btn" onclick="navigate(-1)" disabled>← 上一个</button>
-                        <span class="index" id="sample-index">1/{{ sample_n }}</span>
+                        <span class="index" id="sample-index">1/1</span>
                         <button id="next-btn" onclick="navigate(1)">下一个 →</button>
                     </div>
                 </div>
+                <div id="sample-status" class="sample-status"></div>
                 <div id="diff-content" class="diff-content"></div>
             </div>
 

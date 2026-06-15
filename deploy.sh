@@ -21,6 +21,7 @@ case "$cmd" in
         docker build -t "$NAME" .
 
         echo "==> 启动容器 $NAME (端口 $PORT) ..."
+        [ -f novelforge.db ] || touch novelforge.db
         docker run -d \
             --name "$NAME" \
             -p "$PORT:8000" \
