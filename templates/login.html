@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>润笔阁 - 登录</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(135deg, #f5f0e8 0%, #e8dcc8 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 48px 40px;
+            width: 400px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        .logo h1 {
+            font-size: 32px;
+            color: #2c1810;
+            font-weight: 700;
+            letter-spacing: 4px;
+        }
+        .logo p {
+            color: #8b7355;
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            color: #4a3728;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d4c5a9;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            border-color: #8b6914;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #8b6914;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #6f5510; }
+        .error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .hint {
+            text-align: center;
+            margin-top: 20px;
+            color: #8b7355;
+            font-size: 13px;
+        }
+        .test-keys {
+            margin-top: 16px;
+            padding: 12px;
+            background: #f8f4ec;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #6b5a3e;
+        }
+        .test-keys code {
+            display: block;
+            margin: 4px 0;
+            color: #8b6914;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">
+            <h1>润笔阁</h1>
+            <p>过 AI 检测 · 小说文本重构</p>
+        </div>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="/login">
+            <div class="form-group">
+                <label for="card_key">输入卡密</label>
+                <input type="password" id="card_key" name="card_key" placeholder="请输入您的卡密" required autofocus>
+            </div>
+            <button type="submit" class="btn">进入润笔阁</button>
+        </form>
+        <div class="hint">首次使用请联系管理员获取卡密</div>
+        <div class="test-keys">
+            测试卡密：
+            <code>RUNBIGE-2024-TEST-001</code>
+            <code>RUNBIGE-2024-TEST-002</code>
+        </div>
+    </div>
+</body>
+</html>

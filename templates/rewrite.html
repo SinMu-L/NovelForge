@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>润笔阁 - 改写</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", serif;
+            background: #f5f0e8;
+            min-height: 100vh;
+            color: #2c1810;
+        }
+        .header {
+            background: #fff;
+            border-bottom: 1px solid #e0d5c3;
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .header h1 {
+            font-size: 20px;
+            color: #2c1810;
+            letter-spacing: 2px;
+        }
+        .header .user-info {
+            font-size: 14px;
+            color: #8b7355;
+        }
+        .header .user-info span {
+            color: #8b6914;
+            font-weight: 600;
+        }
+        .header a {
+            color: #8b7355;
+            text-decoration: none;
+            font-size: 14px;
+            margin-left: 16px;
+        }
+        .header a:hover { color: #8b6914; }
+        .container {
+            max-width: 1000px;
+            margin: 32px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .card-title {
+            font-size: 15px;
+            color: #4a3728;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        textarea {
+            width: 100%;
+            min-height: 220px;
+            padding: 16px;
+            border: 1px solid #d4c5a9;
+            border-radius: 8px;
+            font-size: 15px;
+            line-height: 1.8;
+            font-family: inherit;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea:focus { border-color: #8b6914; }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .btn {
+            padding: 10px 28px;
+            background: #8b6914;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #6f5510; }
+        .btn:disabled {
+            background: #c4b69e;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: transparent;
+            color: #8b6914;
+            border: 1px solid #8b6914;
+        }
+        .btn-secondary:hover { background: #f8f4ec; }
+        .word-count {
+            font-size: 13px;
+            color: #8b7355;
+        }
+        .char-count {
+            font-size: 13px;
+            color: #8b7355;
+            margin-left: auto;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 16px;
+            background: #f8f4ec;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #6b5a3e;
+        }
+        .results-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .sample-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sample-nav button {
+            padding: 4px 12px;
+            background: #f0ebe3;
+            border: 1px solid #d4c5a9;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #4a3728;
+        }
+        .sample-nav button:hover { background: #e0d5c3; }
+        .sample-nav button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .sample-nav .index {
+            font-size: 13px;
+            color: #8b7355;
+            min-width: 60px;
+            text-align: center;
+        }
+        .diff-content {
+            line-height: 2;
+            font-size: 15px;
+            padding: 16px;
+            background: #fdfbf9;
+            border-radius: 8px;
+            border: 1px solid #e8e0d5;
+            white-space: pre-wrap;
+        }
+        .diff-content ins {
+            background: #dcfce7;
+            color: #166534;
+            text-decoration: none;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+        .diff-content del {
+            background: #fef2f2;
+            color: #991b1b;
+            padding: 1px 2px;
+            border-radius: 3px;
+        }
+        .diff-content .unchanged { color: #4a3728; }
+        .error-msg {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8b7355;
+        }
+        .loading::after {
+            content: "...";
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+        @keyframes dots { 0%, 20% { content: ""; } 40% { content: "."; } 60% { content: ".."; } 80%, 100% { content: "..."; } }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>润笔阁</h1>
+        <div class="user-info">
+            卡密: <span>{{ card_key }}</span>
+            | 剩余: <span id="remaining-display">{{ remaining }}</span> 字
+            <a href="/logout">退出</a>
+        </div>
+    </div>
+    <div class="container">
+        <div class="card">
+            <div class="card-title">原文</div>
+            <textarea id="input-text" placeholder="在此粘贴您需要润色的小说文本……"></textarea>
+            <div class="toolbar">
+                <button class="btn" id="rewrite-btn" onclick="doRewrite()">开始润色</button>
+                <span class="word-count" id="char-count-display">0 字</span>
+                <span class="char-count" id="remaining-info">剩余 {{ remaining }} 字</span>
+            </div>
+        </div>
+
+        <div id="status-bar" class="status-bar hidden">
+            <span id="status-text"></span>
+        </div>
+
+        <div id="results" class="hidden">
+            <div class="card">
+                <div class="results-header">
+                    <span class="card-title">AI 处理结果</span>
+                    <div class="sample-nav">
+                        <button id="prev-btn" onclick="navigate(-1)" disabled>← 上一个</button>
+                        <span class="index" id="sample-index">1/{{ sample_n }}</span>
+                        <button id="next-btn" onclick="navigate(1)">下一个 →</button>
+                    </div>
+                </div>
+                <div id="diff-content" class="diff-content"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">处理后文本（纯文本，可复制）</div>
+                <div id="plain-text" style="line-height:1.8;font-size:14px;padding:12px;background:#fdfbf9;border-radius:8px;border:1px solid #e8e0d5;white-space:pre-wrap;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/diff@5.2.0/dist/diff.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

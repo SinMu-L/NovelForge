@@ -1,0 +1,13 @@
+novelforge.db
+__pycache__
+*.pyc
+.env
+.git
+README.md
+.venv
+.venv/
+pyproject.toml
+uv.lock
+.python-version
+test_*.py
+*.log

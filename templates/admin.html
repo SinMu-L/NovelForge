@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>润笔阁 - 管理后台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: #f0ebe3;
+            min-height: 100vh;
+            color: #2c1810;
+        }
+
+        .login-page {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #f5f0e8 0%, #e8dcc8 100%);
+        }
+        .login-card {
+            background: #fff;
+            border-radius: 12px;
+            padding: 40px 36px;
+            width: 380px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+        }
+        .login-card h2 { margin-bottom: 24px; font-size: 20px; text-align: center; letter-spacing: 1px; }
+        .login-card input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #d4c5a9;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            margin-bottom: 16px;
+        }
+        .login-card input:focus { border-color: #8b6914; }
+        .login-card .btn {
+            width: 100%;
+            padding: 10px;
+            background: #8b6914;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .login-card .btn:hover { background: #6f5510; }
+        .login-card .error {
+            background: #fef2f2;
+            color: #dc2626;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 220px;
+            background: #2c1810;
+            color: #d4c5a9;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            padding: 24px 20px 20px;
+            border-bottom: 1px solid #4a3728;
+        }
+        .sidebar-header h1 {
+            font-size: 18px;
+            color: #f5f0e8;
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
+        .sidebar-header p {
+            font-size: 12px;
+            color: #8b7355;
+            margin-top: 4px;
+        }
+        .sidebar-nav {
+            padding: 12px 0;
+            flex: 1;
+        }
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            color: #a09080;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+            transition: all 0.15s;
+        }
+        .sidebar-nav a:hover {
+            background: #3a251d;
+            color: #f0ebe3;
+        }
+        .sidebar-nav a.active {
+            background: #3a251d;
+            color: #f5f0e8;
+            border-left-color: #8b6914;
+            font-weight: 600;
+        }
+        .sidebar-nav .icon { font-size: 16px; width: 20px; text-align: center; }
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #4a3728;
+            font-size: 13px;
+        }
+        .sidebar-footer a {
+            color: #8b7355;
+            text-decoration: none;
+        }
+        .sidebar-footer a:hover { color: #d4c5a9; }
+
+        .main-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .topbar {
+            background: #fff;
+            padding: 14px 28px;
+            border-bottom: 1px solid #e0d5c3;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .topbar-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c1810;
+        }
+        .topbar-breadcrumb {
+            font-size: 13px;
+            color: #8b7355;
+        }
+
+        .content {
+            padding: 24px 28px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .tab-page { display: none; }
+        .tab-page.active { display: block; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 18px;
+            margin-bottom: 28px;
+        }
+        .stat-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 22px 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .stat-card .num {
+            font-size: 30px;
+            font-weight: 700;
+            color: #8b6914;
+        }
+        .stat-card .label {
+            font-size: 13px;
+            color: #8b7355;
+            margin-top: 4px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #2c1810;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #f0ebe3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            color: #8b7355;
+            font-weight: 600;
+            border-bottom: 2px solid #f0ebe3;
+            white-space: nowrap;
+        }
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f0ebe3;
+        }
+        tr:hover td { background: #fdfbf9; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .badge-active { background: #dcfce7; color: #166534; }
+        .badge-disabled { background: #fef2f2; color: #991b1b; }
+        .badge-exhausted { background: #f8f4ec; color: #8b7355; }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #4a3728;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .form-group input {
+            padding: 9px 14px;
+            border: 1px solid #d4c5a9;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+        }
+        .form-group input:focus { border-color: #8b6914; }
+        .form-row {
+            display: flex;
+            gap: 16px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+        .form-row .form-group input { width: 120px; }
+        .form-full input { width: 100%; max-width: 560px; font-family: monospace; }
+
+        .btn {
+            padding: 9px 24px;
+            background: #8b6914;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn:hover { background: #6f5510; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .gen-result {
+            margin-top: 14px;
+            padding: 14px;
+            background: #f8f4ec;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .gen-result code {
+            display: block;
+            font-family: monospace;
+            margin: 3px 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 0;
+            color: #8b7355;
+            font-size: 14px;
+        }
+
+        .settings-saved { color: #166534; background: #dcfce7; padding: 4px 12px; border-radius: 4px; font-size: 13px; }
+        .settings-error { color: #991b1b; background: #fef2f2; padding: 4px 12px; border-radius: 4px; font-size: 13px; }
+        #settings-status { margin-left: 12px; }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+{% if locked %}
+<div class="login-page">
+    <div class="login-card">
+        <h2>管理后台登录</h2>
+        {% if error %}
+        <div class="error">{{ error }}</div>
+        {% endif %}
+        <form method="POST" action="/admin/login">
+            <input type="password" name="password" placeholder="请输入管理密码" required autofocus>
+            <button type="submit" class="btn">登录</button>
+        </form>
+    </div>
+</div>
+
+{% else %}
+
+<div class="layout">
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h1>润笔阁</h1>
+            <p>管理后台</p>
+        </div>
+        <div class="sidebar-nav">
+            <a class="active" onclick="switchTab('overview', this)">
+                <span class="icon">&#9632;</span> 概览
+            </a>
+            <a onclick="switchTab('settings', this)">
+                <span class="icon">&#9881;</span> 改写器配置
+            </a>
+            <a onclick="switchTab('cards', this)">
+                <span class="icon">&#128451;</span> 卡密管理
+            </a>
+            <a onclick="switchTab('logs', this)">
+                <span class="icon">&#128196;</span> 改写记录
+            </a>
+        </div>
+        <div class="sidebar-footer">
+            <a href="/">&#8592; 返回首页</a>
+        </div>
+    </div>
+
+    <div class="main-area">
+        <div class="topbar">
+            <span class="topbar-title" id="page-title">概览</span>
+            <span class="topbar-breadcrumb">润笔阁 / 管理后台</span>
+        </div>
+
+        <div class="content">
+            <!-- 概览 -->
+            <div class="tab-page active" id="tab-overview">
+                <div class="stats">
+                    <div class="stat-card">
+                        <div class="num">{{ stats.total_cards }}</div>
+                        <div class="label">总卡密数</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="num">{{ stats.active_cards }}</div>
+                        <div class="label">有效卡密</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="num">{{ stats.total_used_words }}</div>
+                        <div class="label">已用字数</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">快速入口</div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        <button class="btn" onclick="switchTab('settings', document.querySelector('.sidebar-nav a:nth-child(2)'))">配置改写器</button>
+                        <button class="btn" onclick="switchTab('cards', document.querySelector('.sidebar-nav a:nth-child(3)'))">管理卡密</button>
+                        <button class="btn" onclick="switchTab('logs', document.querySelector('.sidebar-nav a:nth-child(4)'))">查看记录</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 改写器配置 -->
+            <div class="tab-page" id="tab-settings">
+                <div class="card">
+                    <div class="card-title">改写器配置</div>
+                    <div class="form-group form-full">
+                        <label>API 地址 (LLM_API_URL)</label>
+                        <input type="text" name="llm_api_url" value="{{ settings.get('llm_api_url', '') }}" placeholder="https://your-api/v1/completions">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>API 密钥 (LLM_API_KEY)</label>
+                        <input type="password" name="llm_api_key" value="{{ settings.get('llm_api_key', '') }}" placeholder="留空则不传 Authorization">
+                    </div>
+                    <div class="form-group form-full">
+                        <label>模型名称 (LLM_MODEL)</label>
+                        <input type="text" name="llm_model" value="{{ settings.get('llm_model', '') }}" placeholder="rewriter">
+                    </div>
+                    <div style="display:flex;align-items:center;margin-top:8px;">
+                        <button class="btn" onclick="saveSettings()">保存配置</button>
+                        <span id="settings-status"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 卡密管理 -->
+            <div class="tab-page" id="tab-cards">
+                <div class="card">
+                    <div class="card-title">生成卡密</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>生成数量</label>
+                            <input type="number" id="gen-count" value="5" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>每张额度 (字)</label>
+                            <input type="number" id="gen-words" value="100000" min="1000" step="1000">
+                        </div>
+                        <button class="btn" onclick="generateCards()">生成</button>
+                    </div>
+                    <div id="gen-result" class="gen-result hidden"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">卡密列表</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>卡密</th>
+                                <th>状态</th>
+                                <th>总额度</th>
+                                <th>已用</th>
+                                <th>剩余</th>
+                                <th>创建时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for card in cards %}
+                            <tr>
+                                <td><code>{{ card.key }}</code></td>
+                                <td>
+                                    {% if card.status == 'active' and card.used_words < card.total_words %}
+                                    <span class="badge badge-active">有效</span>
+                                    {% elif card.status == 'active' and card.used_words >= card.total_words %}
+                                    <span class="badge badge-exhausted">已用完</span>
+                                    {% else %}
+                                    <span class="badge badge-disabled">已禁用</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ card.total_words }}</td>
+                                <td>{{ card.used_words }}</td>
+                                <td>{{ card.total_words - card.used_words }}</td>
+                                <td>{{ card.created_at }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 改写记录 -->
+            <div class="tab-page" id="tab-logs">
+                <div class="card">
+                    <div class="card-title">最近改写记录</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>卡密</th>
+                                <th>字数</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td><code>{{ log.card_key_name[:16] }}{{ '...' if log.card_key_name|length > 16 }}</code></td>
+                                <td>{{ log.word_count }}</td>
+                                <td>{{ log.created_at }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if logs|length == 0 %}
+                    <div class="empty-state">暂无改写记录</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function switchTab(name, el) {
+        document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
+        document.getElementById('tab-' + name).classList.add('active');
+        if (el) el.classList.add('active');
+        var titles = { overview: '概览', settings: '改写器配置', cards: '卡密管理', logs: '改写记录' };
+        document.getElementById('page-title').textContent = titles[name] || name;
+    }
+
+    async function saveSettings() {
+        var status = document.getElementById('settings-status');
+        var formData = new FormData();
+        formData.append('llm_api_url', document.querySelector('[name="llm_api_url"]').value);
+        formData.append('llm_api_key', document.querySelector('[name="llm_api_key"]').value);
+        formData.append('llm_model', document.querySelector('[name="llm_model"]').value);
+
+        try {
+            var resp = await fetch('/admin/settings', { method: 'POST', body: formData });
+            var data = await resp.json();
+            if (data.ok) {
+                status.innerHTML = '<span class="settings-saved">&#10003; 已保存</span>';
+            } else {
+                status.innerHTML = '<span class="settings-error">' + (data.error || '保存失败') + '</span>';
+            }
+        } catch (e) {
+            status.innerHTML = '<span class="settings-error">保存失败</span>';
+        }
+        setTimeout(function() { status.innerHTML = ''; }, 3000);
+    }
+
+    async function generateCards() {
+        var count = document.getElementById('gen-count').value;
+        var words = document.getElementById('gen-words').value;
+        var resultDiv = document.getElementById('gen-result');
+
+        var formData = new FormData();
+        formData.append('count', count);
+        formData.append('words', words);
+
+        try {
+            var resp = await fetch('/admin/generate', { method: 'POST', body: formData });
+            var data = await resp.json();
+            if (data.error) {
+                resultDiv.innerHTML = '<span style="color:#dc2626">' + data.error + '</span>';
+            } else {
+                var html = '生成成功：';
+                data.generated.forEach(function(k) { html += '<code>' + k + '</code>'; });
+                resultDiv.innerHTML = html;
+            }
+            resultDiv.classList.remove('hidden');
+        } catch (e) {
+            resultDiv.innerHTML = '<span style="color:#dc2626">生成失败</span>';
+            resultDiv.classList.remove('hidden');
+        }
+    }
+</script>
+
+{% endif %}
+</body>
+</html>
