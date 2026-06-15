@@ -244,14 +244,107 @@
         }
         @keyframes dots { 0%, 20% { content: ""; } 40% { content: "."; } 60% { content: ".."; } 80%, 100% { content: "..."; } }
         .hidden { display: none; }
+
+        .nav-link {
+            color: #8b7355;
+            text-decoration: none;
+            font-size: 14px;
+            margin-left: 16px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            font-family: inherit;
+        }
+        .nav-link:hover { color: #8b6914; }
+        .nav-link-redeem {
+            color: #8b6914;
+            font-weight: 600;
+        }
+        .nav-link-redeem:hover { color: #6f5510; }
+        .nav-divider {
+            color: #d4c5a9;
+            margin: 0 8px;
+            font-size: 12px;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #fff;
+            border-radius: 14px;
+            padding: 32px;
+            width: 400px;
+            max-width: 90vw;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 14px;
+            right: 18px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            color: #8b7355;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .modal-close:hover { color: #2c1810; }
+        .modal h2 {
+            font-size: 18px;
+            color: #2c1810;
+            margin-bottom: 8px;
+        }
+        .modal p {
+            font-size: 13px;
+            color: #8b7355;
+            margin-bottom: 20px;
+        }
+        .modal .input-row {
+            display: flex;
+            gap: 10px;
+        }
+        .modal .input-row input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #d4c5a9;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            font-family: monospace;
+            letter-spacing: 2px;
+        }
+        .modal .input-row input:focus { border-color: #8b6914; }
+        .modal .input-row .btn {
+            padding: 10px 24px;
+            white-space: nowrap;
+        }
+        .modal .redeem-msg {
+            font-size: 14px;
+            margin-top: 12px;
+            text-align: center;
+        }
+        .modal .redeem-msg.success { color: #166534; }
+        .modal .redeem-msg.error { color: #dc2626; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>润笔阁</h1>
         <div class="user-info">
-            卡密: <span>{{ card_key }}</span>
-            | 剩余: <span id="remaining-display">{{ remaining }}</span> 字
+            <span>{{ card_key }}</span>
+            <span class="nav-divider">|</span>
+            剩余 <span id="remaining-display">{{ remaining }}</span> 字
+            <button class="nav-link nav-link-redeem" onclick="openRedeemModal()">兑换额度</button>
             <a href="/logout">退出</a>
         </div>
     </div>
@@ -291,6 +384,71 @@
         </div>
     </div>
 
+    <!-- Redeem Modal -->
+    <div class="modal-overlay" id="redeem-modal">
+        <div class="modal">
+            <button class="modal-close" onclick="closeRedeemModal()">&times;</button>
+            <h2>兑换额外额度</h2>
+            <p>输入兑换码，增加可用字数</p>
+            <div class="input-row">
+                <input type="text" id="redeem-code" placeholder="输入兑换码" maxlength="32" autocomplete="off">
+                <button class="btn" id="redeem-btn" onclick="doRedeem()">兑换</button>
+            </div>
+            <div id="redeem-msg" class="redeem-msg"></div>
+        </div>
+    </div>
+
+    <script>
+        function openRedeemModal() {
+            document.getElementById('redeem-modal').classList.add('active');
+            document.getElementById('redeem-code').value = '';
+            document.getElementById('redeem-msg').textContent = '';
+            setTimeout(function() { document.getElementById('redeem-code').focus(); }, 100);
+        }
+
+        function closeRedeemModal() {
+            document.getElementById('redeem-modal').classList.remove('active');
+        }
+
+        document.getElementById('redeem-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeRedeemModal();
+        });
+
+        document.getElementById('redeem-code').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') doRedeem();
+        });
+
+        async function doRedeem() {
+            var code = document.getElementById('redeem-code').value.trim();
+            if (!code) return;
+            var btn = document.getElementById('redeem-btn');
+            var msg = document.getElementById('redeem-msg');
+            btn.disabled = true;
+            msg.className = 'redeem-msg';
+            msg.textContent = '处理中...';
+            var formData = new FormData();
+            formData.append('code', code);
+            try {
+                var resp = await fetch('/redeem', { method: 'POST', body: formData });
+                var data = await resp.json();
+                if (data.error) {
+                    msg.className = 'redeem-msg error';
+                    msg.textContent = data.error;
+                } else {
+                    msg.className = 'redeem-msg success';
+                    msg.textContent = '兑换成功！增加 ' + data.added_words + ' 字额度';
+                    var remainingEl = document.getElementById('remaining-display');
+                    remainingEl.textContent = parseInt(remainingEl.textContent) + data.added_words;
+                    document.getElementById('redeem-code').value = '';
+                    setTimeout(closeRedeemModal, 1500);
+                }
+            } catch(e) {
+                msg.className = 'redeem-msg error';
+                msg.textContent = '请求失败，请重试';
+            }
+            btn.disabled = false;
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/diff@5.2.0/dist/diff.min.js"></script>
     <script src="/static/app.js"></script>
 </body>

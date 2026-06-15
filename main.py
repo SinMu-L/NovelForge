@@ -77,6 +77,15 @@ def init_db():
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS redemption_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL,
+            words INTEGER NOT NULL,
+            used INTEGER NOT NULL DEFAULT 0,
+            used_by_card_key TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+            used_at TEXT
+        );
         CREATE INDEX IF NOT EXISTS idx_logs_card ON rewrite_logs(card_key_id);
     """)
     conn.commit()
@@ -95,14 +104,17 @@ def init_card_keys():
 
 def init_settings():
     conn = get_db()
-    existing = conn.execute("SELECT COUNT(*) as cnt FROM settings").fetchone()
-    if existing["cnt"] == 0:
-        conn.executescript(f"""
-            INSERT INTO settings (key, value) VALUES ('llm_api_url', '{LLM_API_URL}');
-            INSERT INTO settings (key, value) VALUES ('llm_api_key', '{LLM_API_KEY}');
-            INSERT INTO settings (key, value) VALUES ('llm_model', '{LLM_MODEL}');
-        """)
-        conn.commit()
+    defaults = [
+        ('llm_api_url', LLM_API_URL),
+        ('llm_api_key', LLM_API_KEY),
+        ('llm_model', LLM_MODEL),
+        ('auto_register_enabled', 'true'),
+        ('auto_register_words', '20000'),
+        ('admin_password_hash', hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()),
+    ]
+    for key, value in defaults:
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, value))
+    conn.commit()
     conn.close()
 
 
@@ -257,15 +269,62 @@ async def call_llm_stream_n(text: str, n: int):
 
 
 @app.get("/")
-async def root():
+async def root(request: Request):
+    card = check_session(request)
+    if card:
+        return RedirectResponse(url="/rewrite")
+
+    existing_card_key = request.cookies.get("card_key")
+    settings = get_settings_dict()
+    auto_enabled = settings.get("auto_register_enabled", "true") == "true"
+
+    if auto_enabled and not existing_card_key:
+        default_words = int(settings.get("auto_register_words", "20000"))
+        key = f"AUTO-{secrets.token_hex(8).upper()}"
+        conn = get_db()
+        conn.execute("INSERT INTO card_keys (key, total_words) VALUES (?, ?)", (key, default_words))
+        conn.commit()
+        conn.close()
+        response = RedirectResponse(url="/rewrite", status_code=302)
+        response.set_cookie(key="card_key", value=key, max_age=86400 * 7, httponly=True)
+        return response
+
     return RedirectResponse(url="/login")
 
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    if check_session(request):
+async def login_page(request: Request, manual: str = "0"):
+    card = check_session(request)
+    if card:
         return RedirectResponse(url="/rewrite")
-    return templates.TemplateResponse(request, "login.html", {"request": request})
+
+    settings = get_settings_dict()
+    auto_enabled = settings.get("auto_register_enabled", "true") == "true"
+
+    existing_card_key = request.cookies.get("card_key")
+
+    if auto_enabled and manual != "1" and not existing_card_key:
+        default_words = int(settings.get("auto_register_words", "20000"))
+        key = f"AUTO-{secrets.token_hex(8).upper()}"
+        conn = get_db()
+        conn.execute("INSERT INTO card_keys (key, total_words) VALUES (?, ?)", (key, default_words))
+        conn.commit()
+        conn.close()
+        response = RedirectResponse(url="/rewrite", status_code=302)
+        response.set_cookie(key="card_key", value=key, max_age=86400 * 7, httponly=True)
+        return response
+
+    exhausted = False
+    if existing_card_key:
+        card_data = get_card_by_key(existing_card_key)
+        if card_data and card_data["used_words"] >= card_data["total_words"]:
+            exhausted = True
+
+    return templates.TemplateResponse(request, "login.html", {
+        "request": request,
+        "auto_register_enabled": auto_enabled,
+        "exhausted": exhausted,
+    })
 
 
 @app.post("/login")
@@ -343,11 +402,42 @@ async def rewrite(request: Request, text: str = Form(...), n: int = Form(SAMPLE_
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.post("/redeem")
+async def redeem_code(request: Request, code: str = Form(...)):
+    card = check_session(request)
+    if not card:
+        return JSONResponse({"error": "未登录或会话已过期"}, status_code=401)
+
+    conn = get_db()
+    redemption = conn.execute(
+        "SELECT * FROM redemption_codes WHERE code = ?", (code.strip(),)
+    ).fetchone()
+
+    if not redemption:
+        conn.close()
+        return JSONResponse({"error": "兑换码无效"}, status_code=400)
+
+    if redemption["used"]:
+        conn.close()
+        return JSONResponse({"error": "兑换码已使用"}, status_code=400)
+
+    conn.execute(
+        "UPDATE card_keys SET total_words = total_words + ? WHERE id = ?",
+        (redemption["words"], card["id"]),
+    )
+    conn.execute(
+        "UPDATE redemption_codes SET used = 1, used_by_card_key = ?, used_at = datetime('now', 'localtime') WHERE id = ?",
+        (card["key"], redemption["id"]),
+    )
+    conn.commit()
+    conn.close()
+
+    return JSONResponse({"ok": True, "added_words": redemption["words"]})
+
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
-    admin_token = request.cookies.get("admin_token")
-    expected_token = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    if not admin_token or admin_token != expected_token:
+    if not check_admin(request):
         return templates.TemplateResponse(request, "admin.html", {"locked": True})
 
     conn = get_db()
@@ -359,10 +449,12 @@ async def admin_page(request: Request):
         ORDER BY r.created_at DESC
         LIMIT 100
     """).fetchall()
+    redemptions = conn.execute("SELECT * FROM redemption_codes ORDER BY created_at DESC").fetchall()
     conn.close()
 
     cards_list = [dict(c) for c in cards]
     logs_list = [dict(l) for l in logs]
+    redemptions_list = [dict(r) for r in redemptions]
 
     stats = {
         "total_cards": len(cards_list),
@@ -375,6 +467,7 @@ async def admin_page(request: Request):
         "locked": False,
         "cards": cards_list,
         "logs": logs_list,
+        "redemptions": redemptions_list,
         "stats": stats,
         "settings": settings,
     })
@@ -382,10 +475,11 @@ async def admin_page(request: Request):
 
 @app.post("/admin/login")
 async def admin_login(request: Request, password: str = Form(...)):
-    if password == ADMIN_PASSWORD:
+    settings = get_settings_dict()
+    stored_hash = settings.get("admin_password_hash", hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest())
+    if hashlib.sha256(password.encode()).hexdigest() == stored_hash:
         response = RedirectResponse(url="/admin", status_code=302)
-        token = hashlib.sha256(password.encode()).hexdigest()
-        response.set_cookie(key="admin_token", value=token, max_age=86400, httponly=True)
+        response.set_cookie(key="admin_token", value=stored_hash, max_age=86400, httponly=True)
         return response
     return templates.TemplateResponse(request, "admin.html", {
         "locked": True,
@@ -395,9 +489,7 @@ async def admin_login(request: Request, password: str = Form(...)):
 
 @app.post("/admin/generate")
 async def generate_cards(request: Request, count: int = Form(5), words: int = Form(100000)):
-    admin_token = request.cookies.get("admin_token")
-    expected_token = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    if not admin_token or admin_token != expected_token:
+    if not check_admin(request):
         return JSONResponse({"error": "未授权"}, status_code=401)
 
     conn = get_db()
@@ -414,8 +506,11 @@ async def generate_cards(request: Request, count: int = Form(5), words: int = Fo
 
 def check_admin(request: Request) -> bool:
     admin_token = request.cookies.get("admin_token")
-    expected_token = hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest()
-    return bool(admin_token and admin_token == expected_token)
+    if not admin_token:
+        return False
+    settings = get_settings_dict()
+    expected_hash = settings.get("admin_password_hash", hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest())
+    return admin_token == expected_hash
 
 
 @app.post("/admin/settings")
@@ -424,18 +519,79 @@ async def save_settings(
     llm_api_url: str = Form(...),
     llm_api_key: str = Form(...),
     llm_model: str = Form(...),
+    auto_register_enabled: str = Form("true"),
+    auto_register_words: int = Form(20000),
 ):
     if not check_admin(request):
         return JSONResponse({"error": "未授权"}, status_code=401)
 
     conn = get_db()
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('llm_api_url', ?)", (llm_api_url,))
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('llm_api_key', ?)", (llm_api_key,))
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('llm_model', ?)", (llm_model,))
+    settings_list = [
+        ('llm_api_url', llm_api_url),
+        ('llm_api_key', llm_api_key),
+        ('llm_model', llm_model),
+        ('auto_register_enabled', auto_register_enabled),
+        ('auto_register_words', str(auto_register_words)),
+    ]
+    for key, value in settings_list:
+        conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     conn.commit()
     conn.close()
 
     return JSONResponse({"ok": True})
+
+
+@app.post("/admin/change-password")
+async def change_admin_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+):
+    if not check_admin(request):
+        return JSONResponse({"error": "未授权"}, status_code=401)
+
+    settings = get_settings_dict()
+    stored_hash = settings.get("admin_password_hash", hashlib.sha256(ADMIN_PASSWORD.encode()).hexdigest())
+
+    if hashlib.sha256(current_password.encode()).hexdigest() != stored_hash:
+        return JSONResponse({"error": "当前密码错误"}, status_code=400)
+
+    if len(new_password) < 6:
+        return JSONResponse({"error": "新密码长度至少6位"}, status_code=400)
+
+    new_hash = hashlib.sha256(new_password.encode()).hexdigest()
+    conn = get_db()
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_password_hash', ?)", (new_hash,))
+    conn.commit()
+    conn.close()
+
+    response = JSONResponse({"ok": True})
+    response.set_cookie(key="admin_token", value=new_hash, max_age=86400, httponly=True)
+    return response
+
+
+@app.post("/admin/redemption/generate")
+async def generate_redemption_codes(
+    request: Request,
+    count: int = Form(5),
+    words: int = Form(50000),
+):
+    if not check_admin(request):
+        return JSONResponse({"error": "未授权"}, status_code=401)
+
+    conn = get_db()
+    generated = []
+    for _ in range(count):
+        code = f"RDM-{secrets.token_hex(8).upper()}"
+        conn.execute(
+            "INSERT INTO redemption_codes (code, words) VALUES (?, ?)",
+            (code, words),
+        )
+        generated.append(code)
+    conn.commit()
+    conn.close()
+
+    return JSONResponse({"generated": generated})
 
 
 if __name__ == "__main__":

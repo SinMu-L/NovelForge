@@ -98,6 +98,25 @@
             color: #8b6914;
             font-family: monospace;
         }
+        .auto-register-hint {
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 13px;
+            color: #166534;
+        }
+        .btn-small {
+            padding: 6px 16px !important;
+            font-size: 13px !important;
+            width: auto !important;
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -108,6 +127,15 @@
         </div>
         {% if error %}
         <div class="error">{{ error }}</div>
+        {% endif %}
+        {% if exhausted %}
+        <div class="error">您的额度已用完，请输入有效卡密或使用兑换码增加额度</div>
+        {% endif %}
+        {% if auto_register_enabled %}
+        <div class="auto-register-hint">
+            <span>系统已开启自动注册，无需卡密即可使用</span>
+            <a href="/" class="btn btn-small">进入润笔阁</a>
+        </div>
         {% endif %}
         <form method="POST" action="/login">
             <div class="form-group">

@@ -330,6 +330,12 @@
             <a onclick="switchTab('logs', this)">
                 <span class="icon">&#128196;</span> 改写记录
             </a>
+            <a onclick="switchTab('registration', this)">
+                <span class="icon">&#9881;</span> 注册与兑换码
+            </a>
+            <a onclick="switchTab('password', this)">
+                <span class="icon">&#128273;</span> 修改密码
+            </a>
         </div>
         <div class="sidebar-footer">
             <a href="/">&#8592; 返回首页</a>
@@ -474,6 +480,105 @@
                     {% endif %}
                 </div>
             </div>
+
+            <!-- 注册与兑换码 -->
+            <div class="tab-page" id="tab-registration">
+                <div class="card">
+                    <div class="card-title">自动注册设置</div>
+                    <div class="form-row" style="align-items:center;">
+                        <div class="form-group">
+                            <label>启用自动注册</label>
+                            <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                                <input type="checkbox" id="auto-register-enabled" {{ 'checked' if settings.get('auto_register_enabled', 'true') == 'true' else '' }} style="width:18px;height:18px;">
+                                为首次访问用户自动分配账号
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>默认额度 (字)</label>
+                            <input type="number" id="auto-register-words" value="{{ settings.get('auto_register_words', '20000') }}" min="1000" step="1000" style="width:120px;">
+                        </div>
+                        <button class="btn" onclick="saveRegistrationSettings()" style="margin-top:4px;">保存</button>
+                        <span id="reg-settings-status"></span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">生成兑换码</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>生成数量</label>
+                            <input type="number" id="rdm-count" value="5" min="1" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>每张额度 (字)</label>
+                            <input type="number" id="rdm-words" value="50000" min="1000" step="1000">
+                        </div>
+                        <button class="btn" onclick="generateRedemptionCodes()">生成</button>
+                    </div>
+                    <div id="rdm-result" class="gen-result hidden"></div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">兑换码列表</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>兑换码</th>
+                                <th>额度</th>
+                                <th>状态</th>
+                                <th>使用卡密</th>
+                                <th>创建时间</th>
+                                <th>使用时间</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for rdm in redemptions %}
+                            <tr>
+                                <td><code>{{ rdm.code }}</code></td>
+                                <td>{{ rdm.words }}</td>
+                                <td>
+                                    {% if rdm.used %}
+                                    <span class="badge badge-disabled">已使用</span>
+                                    {% else %}
+                                    <span class="badge badge-active">未使用</span>
+                                    {% endif %}
+                                </td>
+                                <td>{% if rdm.used_by_card_key %}<code>{{ rdm.used_by_card_key[:16] }}...</code>{% else %}-{% endif %}</td>
+                                <td>{{ rdm.created_at }}</td>
+                                <td>{% if rdm.used_at %}{{ rdm.used_at }}{% else %}-{% endif %}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% if redemptions|length == 0 %}
+                    <div class="empty-state">暂未生成兑换码</div>
+                    {% endif %}
+                </div>
+            </div>
+            <!-- 修改密码 -->
+            <div class="tab-page" id="tab-password">
+                <div class="card">
+                    <div class="card-title">修改管理员密码</div>
+                    <div style="max-width:420px;">
+                        <div class="form-group">
+                            <label>当前密码</label>
+                            <input type="password" id="pwd-current" placeholder="请输入当前密码" style="width:100%;">
+                        </div>
+                        <div class="form-group">
+                            <label>新密码</label>
+                            <input type="password" id="pwd-new" placeholder="至少 6 位" style="width:100%;">
+                        </div>
+                        <div class="form-group">
+                            <label>确认新密码</label>
+                            <input type="password" id="pwd-confirm" placeholder="再次输入新密码" style="width:100%;">
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;margin-top:8px;">
+                            <button class="btn" onclick="changePassword()">修改密码</button>
+                            <span id="pwd-status"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -484,7 +589,7 @@
         document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
         document.getElementById('tab-' + name).classList.add('active');
         if (el) el.classList.add('active');
-        var titles = { overview: '概览', settings: '改写器配置', cards: '卡密管理', logs: '改写记录' };
+        var titles = { overview: '概览', settings: '改写器配置', cards: '卡密管理', logs: '改写记录', registration: '注册与兑换码', password: '修改密码' };
         document.getElementById('page-title').textContent = titles[name] || name;
     }
 
@@ -494,6 +599,8 @@
         formData.append('llm_api_url', document.querySelector('[name="llm_api_url"]').value);
         formData.append('llm_api_key', document.querySelector('[name="llm_api_key"]').value);
         formData.append('llm_model', document.querySelector('[name="llm_model"]').value);
+        formData.append('auto_register_enabled', document.getElementById('auto-register-enabled').checked ? 'true' : 'false');
+        formData.append('auto_register_words', document.getElementById('auto-register-words').value);
 
         try {
             var resp = await fetch('/admin/settings', { method: 'POST', body: formData });
@@ -505,6 +612,98 @@
             }
         } catch (e) {
             status.innerHTML = '<span class="settings-error">保存失败</span>';
+        }
+        setTimeout(function() { status.innerHTML = ''; }, 3000);
+    }
+
+    async function saveRegistrationSettings() {
+        var status = document.getElementById('reg-settings-status');
+        var formData = new FormData();
+        formData.append('llm_api_url', document.querySelector('[name="llm_api_url"]')?.value || '');
+        formData.append('llm_api_key', document.querySelector('[name="llm_api_key"]')?.value || '');
+        formData.append('llm_model', document.querySelector('[name="llm_model"]')?.value || '');
+        formData.append('auto_register_enabled', document.getElementById('auto-register-enabled').checked ? 'true' : 'false');
+        formData.append('auto_register_words', document.getElementById('auto-register-words').value);
+
+        try {
+            var resp = await fetch('/admin/settings', { method: 'POST', body: formData });
+            var data = await resp.json();
+            if (data.ok) {
+                status.innerHTML = '<span class="settings-saved">&#10003; 已保存</span>';
+            } else {
+                status.innerHTML = '<span class="settings-error">' + (data.error || '保存失败') + '</span>';
+            }
+        } catch (e) {
+            status.innerHTML = '<span class="settings-error">保存失败</span>';
+        }
+        setTimeout(function() { status.innerHTML = ''; }, 3000);
+    }
+
+    async function generateRedemptionCodes() {
+        var count = document.getElementById('rdm-count').value;
+        var words = document.getElementById('rdm-words').value;
+        var resultDiv = document.getElementById('rdm-result');
+
+        var formData = new FormData();
+        formData.append('count', count);
+        formData.append('words', words);
+
+        try {
+            var resp = await fetch('/admin/redemption/generate', { method: 'POST', body: formData });
+            var data = await resp.json();
+            if (data.error) {
+                resultDiv.innerHTML = '<span style="color:#dc2626">' + data.error + '</span>';
+            } else {
+                var html = '生成成功：';
+                data.generated.forEach(function(k) { html += '<code>' + k + '</code>'; });
+                resultDiv.innerHTML = html;
+            }
+            resultDiv.classList.remove('hidden');
+        } catch (e) {
+            resultDiv.innerHTML = '<span style="color:#dc2626">生成失败</span>';
+            resultDiv.classList.remove('hidden');
+        }
+    }
+
+    async function changePassword() {
+        var status = document.getElementById('pwd-status');
+        var current = document.getElementById('pwd-current').value;
+        var newPwd = document.getElementById('pwd-new').value;
+        var confirm = document.getElementById('pwd-confirm').value;
+
+        if (!current || !newPwd || !confirm) {
+            status.innerHTML = '<span class="settings-error">请填写所有字段</span>';
+            setTimeout(function() { status.innerHTML = ''; }, 3000);
+            return;
+        }
+        if (newPwd !== confirm) {
+            status.innerHTML = '<span class="settings-error">两次输入的新密码不一致</span>';
+            setTimeout(function() { status.innerHTML = ''; }, 3000);
+            return;
+        }
+        if (newPwd.length < 6) {
+            status.innerHTML = '<span class="settings-error">新密码长度至少 6 位</span>';
+            setTimeout(function() { status.innerHTML = ''; }, 3000);
+            return;
+        }
+
+        var formData = new FormData();
+        formData.append('current_password', current);
+        formData.append('new_password', newPwd);
+
+        try {
+            var resp = await fetch('/admin/change-password', { method: 'POST', body: formData });
+            var data = await resp.json();
+            if (data.ok) {
+                status.innerHTML = '<span class="settings-saved">&#10003; 密码修改成功</span>';
+                document.getElementById('pwd-current').value = '';
+                document.getElementById('pwd-new').value = '';
+                document.getElementById('pwd-confirm').value = '';
+            } else {
+                status.innerHTML = '<span class="settings-error">' + (data.error || '修改失败') + '</span>';
+            }
+        } catch (e) {
+            status.innerHTML = '<span class="settings-error">修改失败</span>';
         }
         setTimeout(function() { status.innerHTML = ''; }, 3000);
     }
